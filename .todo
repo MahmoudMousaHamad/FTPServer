@@ -1,0 +1,27 @@
+sender:
+  - args:
+    - port and window size
+  - Wait for auth against userList.txt file of usernames and pwds
+  - Receive file name from client
+  - Verify file existence and read permissions, or send error message and wait for valid file name
+  - Send window size to client
+  - Start transmission using UDP to client using 256 bytes per payload per packet using selective-repeat sliding window
+    - Keep track of frame sequence number that is being transmitted, ACK, NACK, or timed out
+    - Start a timer to keep track of delayed or lost packets
+    - Retransmit when:
+      - Receiving a NACK
+      - Timer times out (10 seconds)
+    - Slide window when: receiving an ACK from receiver
+    - print SEQ number and type of operation (transmission/retransmission) message after  sending  the  data  packet 
+  - When finished transmission: 
+    - Print statistical report:
+      - Receiver IP and Port Number
+      - Name and Size of the file that was transferred
+      - File Creation Date & Time
+      - Number of Data Packets Transmitted
+      - Number of Packets Re-transmitted
+      - Number of Acknowledgement Received
+      - Number of Negative Acknowledgement Received with Sequence Number
+    - Wait for another auth request
+
+
