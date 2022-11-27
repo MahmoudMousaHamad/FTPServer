@@ -22,6 +22,6 @@ sender:
       - Number of Packets Re-transmitted
       - Number of Acknowledgement Received
       - Number of Negative Acknowledgement Received with Sequence Number
-    - Wait for another auth request
+    - Wait for another auth request 
 
 
