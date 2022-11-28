@@ -136,16 +136,6 @@ int main(int argc, char ** argv) {
 			window_end++;
 		}
 	}
-	// while (window_end < number_of_segments) {
-	// 	int index = receive_segment(sockfd, segments);
-	// 	// Drop 10% of the data packets and send NACK
-	// 	if (rand() % 101 <= 10) {
-	// 		send_nack(sockfd); 
-	// 		receive_segment(sockfd, segments);
-	// 	} else {
-	// 		send_ack(sockfd);
-	// 	}
-	// }
 	// Write segments to file
 	FILE *fp = fopen(output_filename, "w+");
 	for (int i = 0; i < number_of_segments; i++) {

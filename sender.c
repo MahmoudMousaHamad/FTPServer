@@ -21,7 +21,9 @@
 #define ACK "ACK"
 
 static volatile int sockfd, receiver;
-static int packets_num, packets_num_retransmitted, ack_num, nack_num;
+static int packets_num=0, packets_num_retransmitted=0, ack_num=0, nack_num=0, window_start=0, window_end=0, transmission_in_progress=0;
+char *segments[BUFFER_SIZE];
+clock_t *timers[BUFFER_SIZE];
 
 void intHandler() { close(sockfd); }
 void exit_close(int socket) { close(socket); exit(5); }
@@ -98,9 +100,24 @@ const char* getFileCreationTime(char *path) {
     sprintf(buffer, "%s", ctime(&attr.st_mtime));
 	return buffer;
 }
+void *check_timers() {
+	while(transmission_in_progress) {
+		// Check timedout segments
+		for (int i = window_start; i < window_end; i++) {
+			clock_t timer = timers[i];
+			int msec_diff = (clock() - timer) / CLOCKS_PER_SEC;
+			if (msec_diff > 5000) {
+				printf("Segment #%d timedout, retransmitting...\n", i);
+				send_segment(sockfd, segments, i);
+				timers[i] = clock();
+				packets_num_retransmitted++; 
+			}
+		}
+		sleep(1);
+	}
+}
 int main(int argc, char ** argv) {
 	srand(time(NULL));
-
 	char username[BUFFER_SIZE], pwd[BUFFER_SIZE], buffer[BUFFER_SIZE];
 	int username_index = -1, pwd_index = -1, client_len;
 	struct sockaddr_in client, server;
@@ -157,8 +174,6 @@ int main(int argc, char ** argv) {
 		bzero(buffer, BUFFER_SIZE);
 		sprintf(buffer, "%d", number_of_segments);
 		send_message(buffer, "Number of segments", sockfd, BUFFER_SIZE);
-		char *segments[number_of_segments];
-		clock_t *timers[number_of_segments];
 		for (int i=0; i<number_of_segments; i++) timers[i]=0;
 		puts("Preparing segments...");
 		for (int cur_seg = 0; cur_seg < number_of_segments; cur_seg++) {
@@ -167,7 +182,7 @@ int main(int argc, char ** argv) {
 			segments[cur_seg] = segment_buffer;
 		}
 		puts("Sending segments...");
-		int window_start = 0, window_end = 0, acks;
+		transmission_in_progress = 1;
 		// int current_frame;
 		// Send first window_size of segments
 		while (window_end < number_of_segments && window_end < window_size) {
@@ -175,26 +190,29 @@ int main(int argc, char ** argv) {
 			timers[window_end] = clock();
 			window_end++;
 		}
-		while (window_end < number_of_segments || acks == number_of_segments) {
-			send_segment(sockfd, segments, window_end);
-			timers[window_end] = clock();
+		int thread_id, acked_segments;
+		pthread_create(&thread_id, NULL, check_timers, NULL);
+		while (1) {
 			bzero(buffer, BUFFER_SIZE);
 			read(sockfd, buffer, BUFFER_SIZE);
 			if (strcmp(ACK, buffer) == 0) {
 				// Index
 				bzero(buffer, BUFFER_SIZE);read(sockfd, buffer, BUFFER_SIZE);int index = atoi(buffer);
 				// Drop 10% of the ACK packets
-				if (rand() % 101 <= 10) {
+				if (rand() % 101 <= 0) {
 					puts("Dropped ACK.");
 				} else {
 					printf("Segment #%d was ACK\n", index);
 					timers[index] = 0;
+					acked_segments++;
+					ack_num++;
+					if (acked_segments == number_of_segments) break;
 					if (index == window_start) {
+						send_segment(sockfd, segments, window_end);
+						timers[window_end] = clock();
 						window_start++;
 						window_end++;
 					}
-					ack_num++;
-					acks++;
 				}
 			} else if (strcmp(NACK, buffer) == 0) {
 				// Index
@@ -205,33 +223,8 @@ int main(int argc, char ** argv) {
 				packets_num_retransmitted++; 
 				nack_num++; 
 			}
-			// Check timedout segments
-			for (int i = window_start; i < window_end; i++) {
-				clock_t timer = timers[i];
-				int msec_diff = (clock() - timer) / CLOCKS_PER_SEC;
-				if (msec_diff > 5000) {
-					printf("Segment #%d timedout, retransmitting...\n", i);
-					send_segment(sockfd, segments, i);
-					timers[i] = clock();
-					packets_num_retransmitted++; 
-				}
-			}
 		}
-		// for (current_frame = window_start; current_frame < number_of_segments; current_frame++) {
-		// 	send_segment(sockfd, segments, current_frame);
-		// 	// TODO: deploy timer
-		// 	bzero(buffer, BUFFER_SIZE);
-		// 	read(sockfd, buffer, BUFFER_SIZE);
-		// 	if (strcmp(ACK, buffer) == 0) {
-		// 		// Drop 10% of the ACK packets
-		// 		if (rand() % 100 + 0 >= 90) {
-		// 			puts("Dropped ACK.");
-		// 		} else {
-		// 			ack_num++; continue;
-		// 		}
-		// 	}
-		// 	else if (strcmp(NACK, buffer) == 0) {nack_num++; packets_num_retransmitted++; send_segment(sockfd, segments, current_frame);}
-		// }
+		transmission_in_progress = 0;
 		printf(
 			"Receiver IP and Port Number: %s:%d\n"
 			"Name and Size of file: %s, %ld bytes\n"
