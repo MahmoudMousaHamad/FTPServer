@@ -104,22 +104,48 @@ int main(int argc, char ** argv) {
 	// Filename
 	if (!send_message(input_filename, "File name", sockfd, sizeof(input_filename))) {puts("File was not found or is inaccessable."); exit(4);}
 	// Window size
-	char window_size[BUFFER_SIZE];
-	receive_message(&window_size, "Window Size", sockfd);
-	puts(window_size);
+	bzero(buffer, BUFFER_SIZE);
+	receive_message(&buffer, "Window Size", sockfd);
+	int window_size = atoi(buffer);
+	printf("Window size: %d\n", window_size);
 	// Receive file
 	bzero(buffer, BUFFER_SIZE);
 	receive_message(&buffer, "Number of segments", sockfd);
 	int number_of_segments = atoi(buffer);
 	printf("Number of segments: %d\n", number_of_segments);
 	char *segments[number_of_segments];
-	int segment_index = 0;
+	// int segment_index = 0;
 	int window_start, window_end;
-	for(int i = 0; i < number_of_segments; i++) {
+	while (window_end < number_of_segments) {
+		printf("Window end: %d\n", window_end);
 		int index = receive_segment(sockfd, segments);
-		if (rand() % 100 + 0 < 0) {send_ack(sockfd);}
-		else {send_nack(sockfd); receive_segment(sockfd, segments);}
+		// Drop 10% of the data packets
+		if (rand() % 101 <= 70) {
+			printf("Dropped data packet for segment #%d :(\n", index);
+			// NACK
+			send_nack(sockfd);
+			// Index
+			bzero(buffer, BUFFER_SIZE);sprintf(buffer, "%d", window_end);write(sockfd,buffer, BUFFER_SIZE);
+		} else {
+			printf("Received segment #%d\n", index);
+			// ACK
+			send_ack(sockfd);
+			// Index
+			bzero(buffer, BUFFER_SIZE);sprintf(buffer, "%d", window_end);write(sockfd,buffer, BUFFER_SIZE);
+			if (window_end - window_start == window_size) window_start++;
+			window_end++;
+		}
 	}
+	// while (window_end < number_of_segments) {
+	// 	int index = receive_segment(sockfd, segments);
+	// 	// Drop 10% of the data packets and send NACK
+	// 	if (rand() % 101 <= 10) {
+	// 		send_nack(sockfd); 
+	// 		receive_segment(sockfd, segments);
+	// 	} else {
+	// 		send_ack(sockfd);
+	// 	}
+	// }
 	// Write segments to file
 	FILE *fp = fopen(output_filename, "w+");
 	for (int i = 0; i < number_of_segments; i++) {
