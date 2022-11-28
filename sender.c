@@ -198,7 +198,7 @@ int main(int argc, char ** argv) {
 			if (strcmp(ACK, buffer) == 0) {
 				// Index
 				bzero(buffer, BUFFER_SIZE);read(sockfd, buffer, BUFFER_SIZE);int index = atoi(buffer);
-				// Drop 10% of the ACK packets
+				// TODO: Drop 10% of the ACK packets
 				if (rand() % 101 <= 0) {
 					puts("Dropped ACK.");
 				} else {
