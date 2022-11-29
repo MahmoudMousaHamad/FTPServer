@@ -104,16 +104,17 @@ void *check_timers() {
 	while(transmission_in_progress) {
 		// Check timedout segments
 		for (int i = window_start; i < window_end; i++) {
-			clock_t timer = timers[i];
-			int msec_diff = (clock() - timer) / CLOCKS_PER_SEC;
-			if (msec_diff > 5000) {
+			if (timers[i] == 0) continue;
+			clock_t diff = (clock() - (clock_t)timers[i]);
+			int msec_diff = diff * 1000 / CLOCKS_PER_SEC;
+			// printf("%d\n", msec_diff);
+			if (msec_diff > 10000) {
 				printf("Segment #%d timedout, retransmitting...\n", i);
 				send_segment(sockfd, segments, i);
 				timers[i] = clock();
 				packets_num_retransmitted++; 
 			}
 		}
-		sleep(1);
 	}
 }
 int main(int argc, char ** argv) {
@@ -142,8 +143,31 @@ int main(int argc, char ** argv) {
 	if (bind(sockfd, (struct sockaddr*)&server, sizeof(server)) < 0) {perror("Bind()");exit(3);}
 	puts("Binding was successful");
 	// Auth data
-	char* usernames[] = {"Anna","Louis","Cathie","Ken","Sam", "Bailey"};
-	char* passwords[] = {"a86H6T0c","G6M7p8az","Pd82bG57","jO79bNs1","Cfw61RqV","Kuz07YLv"};
+	// char *usernames[] = {"Anna","Louis","Cathie","Ken","Sam", "Bailey"};
+	// char *passwords[] = {"a86H6T0c","G6M7p8az","Pd82bG57","jO79bNs1","Cfw61RqV","Kuz07YLv"};
+	FILE *fp;
+	char *line = NULL;
+	size_t len = 0;
+	ssize_t r;
+	int auth_count=0;
+	fp = fopen("./userList.txt", "r");
+	if (fp == NULL)
+		exit(EXIT_FAILURE);
+    while ((r = getline(&line, &len, fp)) != -1) auth_count++;
+	fclose(fp);
+	char *usernames[auth_count], *passwords[auth_count];
+	auth_count = 0;
+	fp = fopen("./userList.txt", "r");
+    while ((r = getline(&line, &len, fp)) != -1) {
+		char *array[2];
+		char *p = strtok(line, " ");
+		usernames[auth_count] = p;
+		p = strtok(NULL, " ");
+		passwords[auth_count] = p;
+		passwords[auth_count][strlen(p) - 1] = '\0';
+        printf("%s, %s\n", usernames[auth_count], passwords[auth_count]);
+		auth_count++;
+    }
 	// Main loop
 	while (1) {
 		puts("Waiting for datagrams...");
@@ -192,22 +216,24 @@ int main(int argc, char ** argv) {
 		}
 		int thread_id, acked_segments;
 		pthread_create(&thread_id, NULL, check_timers, NULL);
+		int ack_segments[number_of_segments];
+		for(int i=0;i<number_of_segments;i++) ack_segments[i] = 0;
 		while (1) {
 			bzero(buffer, BUFFER_SIZE);
 			read(sockfd, buffer, BUFFER_SIZE);
 			if (strcmp(ACK, buffer) == 0) {
 				// Index
 				bzero(buffer, BUFFER_SIZE);read(sockfd, buffer, BUFFER_SIZE);int index = atoi(buffer);
-				// TODO: Drop 10% of the ACK packets
-				if (rand() % 101 <= 0) {
-					puts("Dropped ACK.");
+				// Drop 10% of the ACK packets
+				if (rand() % 101 <= 10) {
+					printf("Dropped ACK for segment #%d\n", index);
 				} else {
 					printf("Segment #%d was ACK\n", index);
 					timers[index] = 0;
-					acked_segments++;
+					if (ack_segments[index]==0) {ack_segments[index]=1; acked_segments++;}
 					ack_num++;
 					if (acked_segments == number_of_segments) break;
-					if (index == window_start) {
+					if (window_end < number_of_segments) {
 						send_segment(sockfd, segments, window_end);
 						timers[window_end] = clock();
 						window_start++;

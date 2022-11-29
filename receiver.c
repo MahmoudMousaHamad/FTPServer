@@ -115,25 +115,25 @@ int main(int argc, char ** argv) {
 	printf("Number of segments: %d\n", number_of_segments);
 	char *segments[number_of_segments];
 	// int segment_index = 0;
-	int window_start, window_end;
+	int window_start=0, window_end=0;
+	int ack_segments[number_of_segments];
+	for(int i=0;i<number_of_segments;i++) ack_segments[i] = 0;
 	while (window_end < number_of_segments) {
-		printf("Window end: %d\n", window_end);
 		int index = receive_segment(sockfd, segments);
 		// Drop 10% of the data packets
-		if (rand() % 101 <= 70) {
+		if (rand() % 101 <= 10) {
 			printf("Dropped data packet for segment #%d :(\n", index);
 			// NACK
 			send_nack(sockfd);
 			// Index
-			bzero(buffer, BUFFER_SIZE);sprintf(buffer, "%d", window_end);write(sockfd,buffer, BUFFER_SIZE);
+			bzero(buffer, BUFFER_SIZE);sprintf(buffer, "%d", index);write(sockfd,buffer, BUFFER_SIZE);
 		} else {
 			printf("Received segment #%d\n", index);
 			// ACK
 			send_ack(sockfd);
 			// Index
-			bzero(buffer, BUFFER_SIZE);sprintf(buffer, "%d", window_end);write(sockfd,buffer, BUFFER_SIZE);
-			if (window_end - window_start == window_size) window_start++;
-			window_end++;
+			bzero(buffer, BUFFER_SIZE);sprintf(buffer, "%d", index);write(sockfd,buffer, BUFFER_SIZE);
+			if (ack_segments[index]==0) {ack_segments[index]=1; window_end++;}
 		}
 	}
 	// Write segments to file
@@ -156,10 +156,10 @@ int main(int argc, char ** argv) {
 			packets_num,
 			ack_num,
 			nack_num
-		);
-    puts("Exiting...");
+	);
+	puts("Exiting...");
 	close(sockfd);
 	fclose(fp);
-    exit(0);
+	exit(0);
 	return 0;
 }
